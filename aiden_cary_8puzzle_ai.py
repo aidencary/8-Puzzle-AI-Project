@@ -154,13 +154,14 @@ def transition_model(state, action):
 
 
 def goal_test(state):
-  if state == goal_state:
-    return True
-  else:
-    return False
+  return state == goal_state
 
 
 def breadth_first_search(start_state, print_states=False):
+    '''
+    This function implements the Breadth-First Search algorithm to solve the 8-puzzle problem.
+    It uses a priority queue (min-heap) to explore nodes in order of their depth
+    '''
     frontier = []
     expansion_count = 0
 
@@ -232,75 +233,125 @@ def h2(state):
     """
     # This heuristic function returns the total Manhattan distance of all tiles
     # from their goal positions.
+    # Manhattan distance is the sum of the absolute differences between
+    # the current row/column indices and the goal row/column indices for each tile.
     """
     total_manhattan_distance = 0
     
     for row_index, row in enumerate(state):
         for col_index, tile in enumerate(row):
             if tile != 0:  # Skip the blank tile
-                goal_row = (tile - 1) // 3
-                goal_col = (tile - 1) % 3
+                goal_row = (tile - 1) // 3 # Integer division to find the goal row
+                goal_col = (tile - 1) % 3 # Modulus to find the goal column
+                # Calculate Manhattan distance
                 manhattan_distance = abs(row_index - goal_row) + abs(col_index - goal_col)
                 total_manhattan_distance += manhattan_distance
     
     return total_manhattan_distance
 
-def greedy_search(start_state, print_states=False, heuristic=False):
+def greedy_search(start_state, print_states=False, heuristic_fn=h1, log_values=False):
+  '''
+  This function implements the Greedy Best-First Search algorithm to solve the 8-puzzle problem.
+  f(n) = h(n).
+  '''
   frontier = []
   expansion_count = 0
-  # Select heuristic function based on user's choice: False -> h1, True -> h2
-  h = h2 if heuristic else h1
-  # f(n) = h(n) for Greedy Best-First Search
-  heapq.heappush(frontier, (h(start_state), (start_state, [])))
+  expanded_states = set()
+  # f(n) = h(n) for Greedy Best-First Search; carry g for consistency though it's unused in priority
+  heapq.heappush(frontier, (heuristic_fn(start_state), (start_state, [], 0)))
 
   while frontier:
     curr_value, curr_node = heapq.heappop(frontier)
 
     curr_state = curr_node[0]
     curr_path = curr_node[1]
+    curr_g = curr_node[2]
 
+    # Serialize state to a tuple for set membership
+    state_key = tuple(tuple(row) for row in curr_state)
+    if state_key in expanded_states:
+      # Skip states we've already expanded
+      continue
+    expanded_states.add(state_key)
     expansion_count += 1
 
+    # Print the current state if requested
     if print_states:
       print_state(curr_state)
 
+    # Log g/h/f values if requested
+    if log_values:
+      h_curr = heuristic_fn(curr_state)
+      f_curr = h_curr  # Greedy uses f=h
+      print(f"[Greedy][EXPAND] g={curr_g} h={h_curr} f={f_curr} path={''.join(curr_path) if curr_path else '∅'}")
+
+    # Check for goal state
     if curr_state == goal_state:
       print(f"Greedy Search Expansion Count: {expansion_count}")
       return curr_path
 
     # Get available actions from current state
     curr_actions = get_actions(curr_state)
+    
+    # Prevent immediate backtracking (don't undo the last move)
+    if len(curr_path) > 0:
+      last_action = curr_path[-1] 
+      reverse = {'u': 'd', 'd': 'u', 'l': 'r', 'r': 'l'}[last_action] # Get the reverse action using a dictionary
+      if reverse in curr_actions:
+        curr_actions.remove(reverse)
 
     # Generate child node from each action
     for action in curr_actions:
       next_state = transition_model(curr_state, action)
       next_path = copy.deepcopy(curr_path)
       next_path.append(action)
+      next_g = curr_g + 1
       # f(n) = h(n)
-      next_value = h(next_state)
+      next_value = heuristic_fn(next_state)
+
+      # Log g/h/f values if requested
+      if log_values:
+        print(f"[Greedy][GEN] a={action} g={next_g} h={heuristic_fn(next_state)} f={next_value}")
 
       # Add child to priority queue (our frontier)
-      heapq.heappush(frontier, (next_value, (next_state, next_path)))
+      heapq.heappush(frontier, (next_value, (next_state, next_path, next_g)))
 
-def a_star_search(start_state, print_states=False, heuristic=False):
+def a_star_search(start_state, print_states=False, heuristic_fn=h1, log_values=False):
+  '''
+  This function implements the A* Search algorithm to solve the 8-puzzle problem.
+  It uses a priority queue (min-heap) to explore nodes based on the f(n) = g(n) + h(n) value.
+  '''
   frontier = []
   expansion_count = 0
-  # Select heuristic function based on user's choice: False -> h1, True -> h2
-  h = h2 if heuristic else h1
-  # f(n) = g(n) + h(n) for A*
-  heapq.heappush(frontier, (h(start_state), (start_state, [])))
+  expanded_states = set()
+  heapq.heappush(frontier, (heuristic_fn(start_state), (start_state, [], 0)))
 
   while frontier:
     curr_value, curr_node = heapq.heappop(frontier)
 
     curr_state = curr_node[0]
     curr_path = curr_node[1]
+    curr_g = curr_node[2]
 
+    # Serialize state to a tuple for set membership
+    state_key = tuple(tuple(row) for row in curr_state)
+    if state_key in expanded_states:
+      # Skip states we've already expanded
+      continue
+    expanded_states.add(state_key)
     expansion_count += 1
 
+    # Print the current state if requested
     if print_states:
       print_state(curr_state)
 
+    # Log g/h/f values if requested
+    if log_values:
+      h_curr = heuristic_fn(curr_state)
+      f_curr = curr_g + h_curr
+      print(f"[A*][EXPAND] g={curr_g} h={h_curr} f={f_curr} path={''.join(curr_path) if curr_path else '∅'}")
+
+    # Check for goal state
     if curr_state == goal_state:
       print(f"A* Search Expansion Count: {expansion_count}")
       return curr_path
@@ -308,16 +359,28 @@ def a_star_search(start_state, print_states=False, heuristic=False):
     # Get available actions from current state
     curr_actions = get_actions(curr_state)
 
+    # Prevent immediate backtracking (don't undo the last move)
+    if len(curr_path) > 0:
+      last_action = curr_path[-1]
+      reverse = {'u': 'd', 'd': 'u', 'l': 'r', 'r': 'l'}[last_action]
+      if reverse in curr_actions:
+        curr_actions.remove(reverse)
+
     # Generate child node from each action
     for action in curr_actions:
       next_state = transition_model(curr_state, action)
       next_path = copy.deepcopy(curr_path)
       next_path.append(action)
+      next_g = curr_g + 1
       # f(n) = g(n) + h(n)
-      next_value = len(next_path) + h(next_state)
+      next_value = next_g + heuristic_fn(next_state)
+
+      # Log g/h/f values if requested
+      if log_values:
+        print(f"[A*][GEN] a={action} g={next_g} h={heuristic_fn(next_state)} f={next_value}")
 
       # Add child to priority queue (our frontier)
-      heapq.heappush(frontier, (next_value, (next_state, next_path)))
+      heapq.heappush(frontier, (next_value, (next_state, next_path, next_g)))
 
 def execute_search(start_state, search_function):
     """
@@ -336,23 +399,20 @@ def execute_search(start_state, search_function):
     print(f"Time taken: {end_time - start_time:.5f} seconds\n")
 
 def get_heuristic_choice():
-    """
-    Prompts the user to choose a heuristic for A* Search or Greedy Search.
-
-    Returns:
-        bool: False for h1 (misplaced tiles), True for h2 (Manhattan distance).
-    """
-    print("Choose heuristic:")
-    print("1. h1 (Number of misplaced tiles)")
-    print("2. h2 (Total Manhattan distance)")
-    heuristic_choice = input("Enter your choice: ")
-    if heuristic_choice == '1':
-        return False
-    elif heuristic_choice == '2':
-        return True
-    else:
-        print("Invalid heuristic choice. Please try again.")
-        return None
+  """
+  Prompts the user to choose a heuristic for A* Search or Greedy Search.
+  """
+  print("Choose heuristic:")
+  print("1. h1 (Number of misplaced tiles)")
+  print("2. h2 (Total Manhattan distance)")
+  heuristic_choice = input("Enter your choice: ")
+  if heuristic_choice == '1':
+    return h1
+  elif heuristic_choice == '2':
+    return h2
+  else:
+    print("Invalid heuristic choice. Please try again.")
+    return None
 
 def print_menu():
     print("\n8-Puzzle Solver")
@@ -361,10 +421,12 @@ def print_menu():
     print("3. Run Greedy Search")
     print("4. Run A* Search")
     print("5. Run all search algorithms sequentially")
-    print("6. Clear terminal")
+    print("6. Clear terminal & Restart with fixed depth")
     print("7. Exit")
 
 if __name__ == '__main__':
+  
+  # Hard coded fixed depth for testing
   fixed_depth = 3
 
   print("Welcome to the Aiden's 8-Puzzle Solver!")
@@ -374,53 +436,64 @@ if __name__ == '__main__':
   print("Generated Start State:")
   print_state(start_state)
 
+  # Main loop
   while True:
     print_menu()
     choice = input("Enter your choice: ")
 
+    # Generate a new start state
     if choice == '1':
       num_of_moves = int(input("Enter the number of moves to generate the start state: "))
       start_state = generate_random_start_w_fixed_depth(num_of_moves)
       print("Generated Start State:")
       print_state(start_state)
 
+    # Options for printing states and/or logging g/h/f values
     elif choice in ['2', '3', '4', '5']:
       print_state_option = input("Do you want to print the state during the search? (y/n): ").lower() == 'y'
-
+      # May also add option to write to file later but will need to modify execute_search function and search functions
+      # write_to_file = input("Do you want to write the output to a file? (y/n): ").lower() == 'y'
+      if choice in ['3', '4', '5']:
+        log_values = input("Do you want to log g/h/f values during the search? (y/n): ").lower() == 'y'
+      
+      # Execute the chosen search algorithm(s)
+      # Using lambda to pass additional parameters
       if choice == '2':
         print("Running Breadth-First Search...")
         execute_search(start_state, lambda state: breadth_first_search(state, print_state_option))
 
       elif choice == '3':
         while True:
-          heuristic = get_heuristic_choice()
-          if heuristic is not None:
+          heuristic_fn = get_heuristic_choice()
+          if heuristic_fn is not None:
             break
         print("Running Greedy Search...")
-        execute_search(start_state, lambda state: greedy_search(state, print_state_option, heuristic))
+        execute_search(start_state, lambda state: greedy_search(state, print_state_option, heuristic_fn, log_values))
 
       elif choice == '4':
         while True:
-          heuristic = get_heuristic_choice()
-          if heuristic is not None:
+          heuristic_fn = get_heuristic_choice()
+          if heuristic_fn is not None:
             break
         print("Running A* Search...")
-        execute_search(start_state, lambda state: a_star_search(state, print_state_option, heuristic))
+        execute_search(start_state, lambda state: a_star_search(state, print_state_option, heuristic_fn, log_values))
 
       elif choice == '5':
         while True:
-          heuristic = get_heuristic_choice()
-          if heuristic is not None:
+          heuristic_fn = get_heuristic_choice()
+          if heuristic_fn is not None:
             break
         print("Running all search algorithms sequentially...\n")
         execute_search(start_state, lambda state: breadth_first_search(state, print_state_option))
-        execute_search(start_state, lambda state: greedy_search(state, print_state_option, heuristic))
-        execute_search(start_state, lambda state: a_star_search(state, print_state_option, heuristic))
+        execute_search(start_state, lambda state: greedy_search(state, print_state_option, heuristic_fn, log_values))
+        execute_search(start_state, lambda state: a_star_search(state, print_state_option, heuristic_fn, log_values))
+          
 
+    # Clear terminal and regenerate start state at hard coded fixed depth
     elif choice == '6':
       os.system('cls')
       start_state = generate_random_start_w_fixed_depth(fixed_depth)
-      print("Generated Start State:")
+      print(f"Generated Start State at fixed depth of {fixed_depth}:")
       print_state(start_state)
 
     elif choice == '7':
